@@ -1,0 +1,280 @@
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// Сайт, который управляется через CMS (например, rucode).
+model Project {
+  id               String   @id @default(cuid())
+  slug             String   @unique
+  name             String
+  defaultLocale    String   @default("ru")
+  /// URL вебхука сайта, который сбрасывает кэш (POST, заголовок x-revalidate-secret).
+  revalidateUrl    String?
+  revalidateSecret String?
+  /// Адрес сайта без пути: админка показывает по нему предпросмотр страниц.
+  siteUrl          String?
+  /// Ссылка на репозиторий сайта: только справочная информация, CMS не скачивает код.
+  repositoryUrl    String?
+  /// Номер счётчика Яндекс Метрики: справка для менеджеров, в публичный API не отдаётся.
+  metrikaCounterId String?
+  /// SHA-256 ключа, которым CI публикует манифест блоков.
+  ciKeyHash        String?
+  /// Последний загруженный манифест блоков фронтенда. Хранится текстом, а не JSONB:
+  /// JSONB переставляет ключи, а порядок полей в схеме блоков задаёт порядок полей формы.
+  manifest         String?  @db.Text
+  manifestHash     String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  pages        Page[]
+  media        Media[]
+  submissions  FormSubmission[]
+  integrations ProjectIntegration[]
+  grants       UserGrant[]
+  lmsGroups    ProjectLmsGroup[]
+  lmsRoles     ProjectLmsRole[]
+}
+
+/// Группа LMS, участники которой получают доступ к проекту. Состав группы правят только в LMS.
+model ProjectLmsGroup {
+  id        String  @id @default(cuid())
+  projectId String
+  /// ID проекта LMS из заголовка `X-Cms-User-Projects`.
+  groupId   String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, groupId])
+  @@index([groupId])
+}
+
+/// Профиль роли LMS в проекте: что может пользователь с такой ролью. Роль без профиля ничего не даёт.
+model ProjectLmsRole {
+  id        String   @id @default(cuid())
+  projectId String
+  /// Значение `X-Cms-User-Role` в нижнем регистре.
+  role      String
+  /// `project` (весь проект) или `pages` (только `pageIds`).
+  scope     String
+  pageIds   String[]
+  /// Раздел «Заявки»: содержит персональные данные, поэтому включается отдельно.
+  requests  Boolean  @default(false)
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, role])
+}
+
+/// Подключённая к проекту внешняя интеграция (сейчас только Telegram-уведомления о заявках).
+/// Одна запись на тип в проекте. Тип хранится строкой, а не enum БД: новая интеграция не требует миграции.
+model ProjectIntegration {
+  id            String    @id @default(cuid())
+  projectId     String
+  /// Тип интеграции: "telegram".
+  type          String
+  enabled       Boolean   @default(false)
+  /// Открытые настройки (для Telegram: чаты, фильтр форм, имя бота). Секретов здесь нет.
+  config        Json
+  /// Секрет интеграции (токен бота), зашифрован `SecretBox` с контекстом, привязанным к типу.
+  secret        String?   @db.Text
+  lastSuccessAt DateTime?
+  lastErrorAt   DateTime?
+  lastError     String?   @db.Text
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, type])
+}
+
+/// Пользователь CMS. `externalId`: `local:<cuid>` у заведённых здесь, позже `lms:<id>` у пришедших из LMS.
+/// Пароль и `loginEmail` нужны только временному локальному входу (до LMS); ролей нет, права в `UserGrant`.
+model User {
+  id           String   @id @default(cuid())
+  externalId   String   @unique
+  email        String
+  name         String?
+  /// Почта для входа по паролю, в нижнем регистре; null у служебных пользователей (dev, ADMIN_TOKEN, CLI).
+  loginEmail   String?  @unique
+  /// Хэш пароля (scrypt, параметры внутри строки); null: войти по паролю нельзя.
+  passwordHash String?
+  isSuperAdmin Boolean  @default(false)
+  /// Заблокированный не входит, а его сессии перестают действовать сразу.
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  updatedPages Page[]         @relation("PageUpdatedBy")
+  deletedPages Page[]         @relation("PageDeletedBy")
+  draftPages   Page[]         @relation("PageDraftBy")
+  revisions    PageRevision[]
+  media        Media[]
+  grants       UserGrant[]
+  sessions     Session[]
+}
+
+/// Право пользователя на проект: весь проект (`scope=project`) или отдельные страницы (`scope=pages`).
+/// `source` отделяет локальные права от пришедших из LMS: при синхронизации с LMS заменяются только `lms`.
+model UserGrant {
+  id        String   @id @default(cuid())
+  userId    String
+  projectId String
+  scope     String
+  /// Для `scope=pages`: id страниц; для `project` пусто.
+  pageIds   String[]
+  /// Раздел «Заявки». null: по умолчанию (только при `scope=project`, как у локальных прав); иначе решает значение (права из LMS).
+  requests  Boolean?
+  source    String   @default("local")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectId, source])
+  @@index([projectId])
+}
+
+/// Серверная сессия входа. В БД только SHA-256 токена: утечка БД не даёт войти.
+model Session {
+  id         String   @id @default(cuid())
+  tokenHash  String   @unique
+  userId     String
+  /// Безусловный предел жизни (создание + 7 дней).
+  expiresAt  DateTime
+  /// Последняя активность: простой дольше 8 часов обрывает сессию. Пишется не чаще раза в минуту.
+  lastUsedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+/// Страница проекта. `blocks`/`meta`/... это опубликованное содержимое, его читает сайт; правки до публикации
+/// лежат в `draft`. Версия растёт и снимок попадает в `PageRevision` только при публикации.
+/// Удаление мягкое: страница с `deletedAt` скрыта на сайте и в списках (корзина), история сохраняется.
+/// Адрес остаётся занятым, пока страницу не восстановят или не удалят навсегда.
+model Page {
+  id              String   @id @default(cuid())
+  projectId       String
+  /// Нормализованный путь: "/index" для главной, "/champ", "/news/2026".
+  slug            String
+  version         Int      @default(1)
+  blocks          Json     @default("[]")
+  meta            Json?
+  /// Шапка страницы (ссылки, логотипы) по `headerSchema` манифеста; null: шапка по умолчанию без своих ссылок.
+  header          Json?
+  /// Футер страницы (ссылки, регламент, контакты) по `footerSchema` манифеста; null: футер по умолчанию.
+  footer          Json?
+  noFooterSpacing Boolean  @default(false)
+  /// Не опубликованное на сайт содержимое (blocks, meta, header, footer, noFooterSpacing одним JSON); null: черновика нет.
+  draft           Json?
+  draftUpdatedAt  DateTime?
+  draftById       String?
+  updatedById     String?
+  /// Когда страницу переместили в корзину; null у живых страниц.
+  deletedAt       DateTime?
+  deletedById     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  project   Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  updatedBy User?          @relation("PageUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  deletedBy User?          @relation("PageDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull)
+  draftBy   User?          @relation("PageDraftBy", fields: [draftById], references: [id], onDelete: SetNull)
+  revisions PageRevision[]
+
+  @@unique([projectId, slug])
+  @@index([projectId, deletedAt])
+}
+
+/// Снимок страницы на момент каждой публикации: история версий.
+model PageRevision {
+  id              String   @id @default(cuid())
+  pageId          String
+  version         Int
+  blocks          Json
+  meta            Json?
+  header          Json?
+  footer          Json?
+  noFooterSpacing Boolean  @default(false)
+  authorId        String?
+  createdAt       DateTime @default(now())
+
+  page   Page  @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  author User? @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@unique([pageId, version])
+}
+
+/// Метаданные загруженного файла. Сам файл лежит в хранилище (диск или S3), в БД только ссылка.
+model Media {
+  id           String   @id @default(cuid())
+  projectId    String
+  /// Ключ в хранилище: "<project>/<sha256>.<ext>".
+  key          String
+  sha256       String
+  mime         String
+  size         Int
+  width        Int?
+  height       Int?
+  originalName String
+  uploadedById String?
+  createdAt    DateTime @default(now())
+
+  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uploadedBy User?   @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, sha256])
+  @@unique([projectId, key])
+}
+
+/// Заявка с формы сайта проекта. Принимается публичным эндпоинтом, читается менеджерами с доступом ко всему проекту.
+/// Только чтение: статусов и правок нет. Удаляется вместе с проектом.
+model FormSubmission {
+  id         String   @id @default(cuid())
+  projectId  String
+  /// Ключ формы, заданный сайтом ("consortium").
+  formKey    String
+  /// Контакты вынесены из `fields` для списка; необязательны, у формы может не быть такого поля.
+  name       String?
+  email      String?
+  phone      String?
+  pageUrl    String?
+  /// Все поля формы как отправлены (строки и списки строк).
+  fields     Json
+  /// Подписи полей (ключ -> вопрос формы), которые прислал сайт; у старых заявок и у форм без подписей `null`.
+  labels     Json?
+  /// Все значения одной строкой в нижнем регистре: поиск по заявкам.
+  searchText String   @db.Text
+  createdAt  DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+  @@index([projectId, formKey])
+}
+
+/// Общий справочник «Регионы»: принадлежит всей CMS, а не проекту; его по публичному API читает любой сайт
+/// (`/public/dictionaries/regions`). Правит только администратор админки.
+/// Удаление окончательное: версий и корзины у справочников нет.
+model Region {
+  id        String   @id @default(cuid())
+  /// Идентификатор региона во внешней системе (форма участия): сайт отправляет его как есть. Уникален глобально.
+  value     Int      @unique
+  label     String
+  /// Порядок в списке: порядок регионов не алфавитный, его задаёт редактор.
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sortOrder])
+}

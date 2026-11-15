@@ -1,0 +1,130 @@
+name: Deploy CMS to nuxt.rucode.net
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Только показать, какие файлы изменятся на сервере (без копирования и перезапуска)'
+        type: boolean
+        default: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: crito
+          POSTGRES_PASSWORD: crito
+          POSTGRES_DB: crito
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U crito"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run test:e2e
+
+  deploy:
+    needs: check
+    runs-on: ubuntu-latest
+    # Два деплоя одновременно перемешали бы файлы на сервере: новый ждёт окончания текущего.
+    concurrency:
+      group: deploy-crito
+      cancel-in-progress: false
+    env:
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+      SSH_PORT: ${{ secrets.SSH_PORT }}
+      # Серверы приложений (алиасы из ~/.ssh/config на cron), где deploy.sh перезапускает pm2. Пустая переменная репозитория
+      # CRITO_WEB_HOSTS переопределяет значение; чтобы отключить перезапуск, задайте в ней пробел.
+      CRITO_WEB_HOSTS: ${{ vars.CRITO_WEB_HOSTS || 'APP1 APP2' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Собрать API и админку
+        env:
+          # Под этим префиксом админка проксируется в боевом nginx (https://edu.mipt.ru/adm/cms-admin/);
+          # он влияет на адреса ассетов, поэтому задаётся при сборке.
+          NUXT_APP_BASE_URL: /adm/cms-admin/
+        run: npm run build
+
+      # Сервер получает готовое: dev-зависимости (Nuxt, Nest CLI, vitest) ему не нужны.
+      - name: Production-зависимости API
+        run: |
+          rm -rf node_modules apps/*/node_modules
+          npm ci --omit=dev --workspace @crito/api
+
+      - name: Собрать папку для сервера
+        run: bash deploy/stage.sh "$RUNNER_TEMP/cms-admin"
+
+      - name: Настроить ssh
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          # Необязательный секрет: вывод `ssh-keyscan -p <порт> <хост>` с вашей машины. Без него
+          # отпечаток сервера берётся при первом подключении (защита от подмены слабее).
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p ~/.ssh
+          # \r на случай, если ключ вставили в секрет из Windows
+          printf '%s\n' "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/deploy_key
+          if [ -n "$SSH_KNOWN_HOSTS" ]; then
+            printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            ssh-keyscan -p "${SSH_PORT:-22}" "$SSH_HOST" > ~/.ssh/known_hosts
+          fi
+
+      - name: Скопировать файлы на сервер
+        run: |
+          set -euo pipefail
+          dry=""
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then dry="--dry-run"; fi
+          # --delete убирает с сервера всё, чего нет в собранной папке. Исключения (в том числе от --delete):
+          # настройки site.env, polyfill-crypto.mjs и локальное хранилище файлов API (api/uploads и uploads в корне: туда указывает STORAGE_LOCAL_DIR на боевом сервере).
+          # --no-owner --no-group: пользователь деплоя не может назначать группу файлам (chgrp: Operation not permitted).
+          # --omit-dir-times --omit-link-times: корень папки и старые ссылки node_modules/.bin принадлежат не ему,
+          # время им менять нельзя (failed to set times); у обычных файлов время по-прежнему переносится.
+          # --no-perms --executability: корень ~/cms-admin принадлежит не пользователю деплоя, chmod на нём даёт
+          # «failed to set permissions on ".../cms-admin/."»; права не переносим, но бит исполнения (скрипты, .bin) сохраняем.
+          rsync -az --no-owner --no-group --no-perms --executability --omit-dir-times --omit-link-times --delete --itemize-changes $dry \
+            --exclude='/site.env' --exclude='/polyfill-crypto.mjs' --exclude='/api/uploads/' --exclude='/uploads/' \
+            --exclude='/.env' --exclude='/.env.*' \
+            -e "ssh -i $HOME/.ssh/deploy_key -p ${SSH_PORT:-22} -o IdentitiesOnly=yes" \
+            "$RUNNER_TEMP/cms-admin/" "$SSH_USER@$SSH_HOST:/home/$SSH_USER/cms-admin/"
+
+      - name: Собрать и перезапустить на сервере
+        if: github.event.inputs.dry_run != 'true'
+        run: |
+          set -euo pipefail
+          ssh -i "$HOME/.ssh/deploy_key" -p "${SSH_PORT:-22}" -o IdentitiesOnly=yes \
+            "$SSH_USER@$SSH_HOST" "CRITO_WEB_HOSTS=$(printf '%q' "${CRITO_WEB_HOSTS:-}") bash -s" <<'REMOTE'
+          set -euo pipefail
+          node_bin="$HOME/.nvm/versions/node/v24.21.0/bin"
+          export PATH="$node_bin:$PATH"
+          # Папка и site.env лежат в домашнем каталоге пользователя деплоя; nginx и pm2 видят её как
+          # /var/www/edu.mipt.ru/adm/cms-admin (путь зашит в ecosystem.config.cjs).
+          export CRITO_ROOT="$HOME/cms-admin"
+          bash "$CRITO_ROOT/deploy/deploy.sh"
+          REMOTE

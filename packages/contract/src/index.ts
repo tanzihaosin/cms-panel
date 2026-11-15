@@ -1,0 +1,71 @@
+/**
+ * @crito/contract: типы данных между API, админкой и сайтами.
+ *
+ * Пакет содержит только типы и подключается без сборки (`import type`), поэтому рантайм-значений
+ * здесь быть не должно. Описывает формат JSON «по проводу»: даты приходят строками.
+ */
+export type {
+  CreateUserRequest,
+  Grant,
+  LoginRequest,
+  LoginResponse,
+  UpdateUserRequest,
+  UserAccount,
+  UserGrants,
+} from './auth.js'
+export type { LmsAccess, LmsRoleProfile } from './lms.js'
+export type { ContentBlock, ContentPage, ContentPageMeta, PageFooter, PageHeader } from './content.js'
+export type { CreateRegionRequest, PublicRegion, RegionItem, UpdateRegionRequest } from './dictionaries.js'
+export type { ApiErrorBody } from './errors.js'
+export type { ExportFile } from './import.js'
+export type {
+  IntegrationSummary,
+  IntegrationType,
+  TelegramChat,
+  TelegramChatCandidate,
+  TelegramDeliveryResult,
+  TelegramDiscoverResponse,
+  TelegramIntegration,
+  TelegramTestResponse,
+  UpdateTelegramIntegrationRequest,
+} from './integrations.js'
+export type { BlockManifest, JsonSchema, ManifestBlock } from './manifest.js'
+export type { CurrentUser } from './me.js'
+export type { MediaItem } from './media.js'
+export type {
+  FormSubmissionDetail,
+  FormSubmissionItem,
+  FormSubmissionList,
+  SubmissionFieldValue,
+  SubmitFormRequest,
+  SubmitFormResponse,
+} from './requests.js'
+export type {
+  CreatePageRequest,
+  PageContent,
+  PageDetail,
+  PageDraft,
+  PageListItem,
+  PageRevisionDetail,
+  PageRevisionItem,
+  PublishPageRequest,
+  TrashedPageItem,
+  UpdatePageRequest,
+} from './pages.js'
+export type {
+  PreviewChannel,
+  PreviewDraftMessage,
+  PreviewDraftPage,
+  PreviewMessageToAdmin,
+  PreviewMessageToSite,
+  PreviewPickMessage,
+  PreviewReadyMessage,
+  PreviewSelectMessage,
+} from './preview.js'
+export type {
+  CreateProjectRequest,
+  CreateProjectResponse,
+  ProjectSummary,
+  RotateCiKeyResponse,
+  UpdateProjectRequest,
+} from './projects.js'

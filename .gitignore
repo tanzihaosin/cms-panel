@@ -1,0 +1,21 @@
+node_modules/
+dist/
+.output/
+.nuxt/
+.env
+.env.*
+!.env.example
+uploads/
+coverage/
+*.log
+.idea/
+.DS_Store
+scripts/rucode/pages.json
+*.tsbuildinfo
+# Prisma-клиент генерируется при установке и сборке (prisma generate)
+apps/api/src/generated/
+
+.claude/
+.codex
+CLAUDE.md
+AGENTS.md
