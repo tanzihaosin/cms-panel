@@ -5,6 +5,7 @@ const open = ref(false)
 const slug = useCurrentProjectSlug()
 const route = useRoute()
 const config = useRuntimeConfig()
+const demo = config.public.demo
 // Админка может жить под префиксом (/admin): картинка из public лежит под ним же.
 const assetBase = config.app.baseURL.replace(/\/+$/, '')
 const logoSrc = `${assetBase}/logo.png`
@@ -17,7 +18,9 @@ const close = () => { open.value = false }
 // Настройки проекта видит только администратор админки (права всё равно проверяет API).
 const { data: me } = useMe()
 // Пароли в CMS не меняются (это дело LMS). Вошедшему через LMS выход тоже не нужен: остаётся справка о том, кто вошёл.
-const userMenu = computed(() => me.value?.viaLms
+const userMenu = computed(() => demo
+  ? [[{ label: 'Демонстрационный режим', icon: 'i-lucide-info', disabled: true }]]
+  : me.value?.viaLms
   ? [[{ label: me.value.email, type: 'label' as const }, { label: 'Вход через LMS', icon: 'i-lucide-badge-check', disabled: true }]]
   : [[{ label: 'Выйти', icon: 'i-lucide-log-out', onSelect: () => logout() }]])
 // Заявки содержат персональные данные: пункт нужен только при доступе ко всему проекту или по роли из LMS.
@@ -39,7 +42,7 @@ const links = computed<NavigationMenuItem[][]>(() => [
         onSelect: close
       }))
     },
-    ...(me.value?.isSuperAdmin
+    ...(!demo && me.value?.isSuperAdmin
       ? [{
           label: 'Пользователи',
           icon: 'i-lucide-users',
@@ -68,7 +71,7 @@ const links = computed<NavigationMenuItem[][]>(() => [
           to: `/${slug.value}/media`,
           onSelect: close
         },
-        ...(requestsAccess.value
+        ...(!demo && requestsAccess.value
           ? [{
               label: 'Заявки',
               icon: 'i-lucide-inbox',
@@ -76,7 +79,7 @@ const links = computed<NavigationMenuItem[][]>(() => [
               onSelect: close
             }]
           : []),
-        ...(me.value?.isSuperAdmin
+        ...(!demo && me.value?.isSuperAdmin
           ? [{
               label: 'Интеграции',
               icon: 'i-lucide-plug',
@@ -84,7 +87,7 @@ const links = computed<NavigationMenuItem[][]>(() => [
               onSelect: close
             }]
           : []),
-        ...(me.value?.isSuperAdmin
+        ...(!demo && me.value?.isSuperAdmin
           ? [{
               label: 'Настройки',
               icon: 'i-lucide-settings',
@@ -134,7 +137,7 @@ const links = computed<NavigationMenuItem[][]>(() => [
       <template #footer="{ collapsed }">
         <div class="flex w-full flex-col gap-2">
           <!-- Внешний адрес: открываем в этой же вкладке, как возврат на предыдущий сервис. -->
-          <UTooltip v-if="collapsed" text="Вернуться в LMS">
+          <UTooltip v-if="!demo && collapsed" text="Вернуться в LMS">
             <UButton
               :to="lmsUrl"
               target="_self"
@@ -147,7 +150,7 @@ const links = computed<NavigationMenuItem[][]>(() => [
             />
           </UTooltip>
           <UButton
-            v-else
+            v-else-if="!demo"
             :to="lmsUrl"
             target="_self"
             icon="i-lucide-arrow-left"

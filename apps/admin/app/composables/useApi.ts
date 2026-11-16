@@ -7,6 +7,7 @@ import type { ApiErrorBody } from '@crito/contract'
  */
 export function useApi() {
   const config = useRuntimeConfig()
+  if (config.public.demo) return demoApi as unknown as ReturnType<typeof $fetch.create>
   // Админка может жить под префиксом (/admin): прокси лежит рядом с ней, а не в корне домена.
   const base = config.app.baseURL.replace(/\/+$/, '')
   const route = useRoute()

@@ -58,7 +58,7 @@ function finishCreation() {
 
 // Единственный проект открываем сразу. Администратору главную не пропускаем: с неё он идёт в справочники
 // и видит все проекты, а не один.
-if (projects.value.length === 1 && me.value && !me.value.isSuperAdmin) {
+if (!useRuntimeConfig().public.demo && projects.value.length === 1 && me.value && !me.value.isSuperAdmin) {
   await navigateTo(`/${projects.value[0]!.slug}/pages`, { replace: true })
 }
 
@@ -214,7 +214,7 @@ function siteHost(origin: string | null): string | null {
                 size="xs"
               />
               <UButton
-                v-if="project.fullAccess"
+                v-if="project.requestsAccess"
                 :to="`/${project.slug}/requests`"
                 icon="i-lucide-inbox"
                 label="Заявки"

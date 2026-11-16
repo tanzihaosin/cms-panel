@@ -12,6 +12,7 @@ const props = defineProps<{
 const emit = defineEmits<{ select: [item: MediaItem] }>()
 
 const toast = useToast()
+const demo = useRuntimeConfig().public.demo
 const media = useMedia(() => props.project)
 
 const search = ref('')
@@ -32,6 +33,10 @@ const visible = computed(() =>
 
 async function uploadFiles(files: File[]) {
   if (!files.length) return
+  if (demo) {
+    toast.add({ title: 'Загрузка файлов недоступна в демо', color: 'neutral' })
+    return
+  }
   uploading.value = true
   try {
     const uploaded = await media.upload(files)
@@ -102,7 +107,7 @@ const isImage = (item: MediaItem) => item.mime.startsWith('image/')
   >
     <div class="flex flex-wrap items-center gap-2">
       <UInput v-model="search" icon="i-lucide-search" placeholder="Поиск по имени файла" class="min-w-48 flex-1" />
-      <UButton label="Загрузить" icon="i-lucide-upload" :loading="uploading" @click="fileInput?.click()" />
+      <UButton label="Загрузить" icon="i-lucide-upload" :loading="uploading" :disabled="demo" @click="fileInput?.click()" />
       <input
         ref="fileInput"
         type="file"
@@ -125,7 +130,7 @@ const isImage = (item: MediaItem) => item.mime.startsWith('image/')
     </p>
 
     <p v-else-if="!visible.length" class="rounded-lg border border-dashed border-default p-8 text-center text-sm text-muted">
-      {{ debouncedSearch ? 'Ничего не найдено' : 'Файлов пока нет. Перетащите их сюда или нажмите «Загрузить».' }}
+      {{ debouncedSearch ? 'Ничего не найдено' : demo ? 'В демонстрационной медиатеке нет файлов; загрузка отключена.' : 'Файлов пока нет. Перетащите их сюда или нажмите «Загрузить».' }}
     </p>
 
     <ul v-else class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">

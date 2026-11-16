@@ -16,6 +16,7 @@ export default defineNuxtConfig({
     // Служебный токен API (NUXT_ADMIN_TOKEN, = ADMIN_TOKEN API). Только серверная часть: в браузер не попадает.
     adminToken: '',
     public: {
+      demo: process.env.NUXT_PUBLIC_DEMO === '1',
       // Префикс, под которым браузер обращается к API (на том же origin: нет CORS и cookie между доменами).
       apiBase: '/cms-api'
     }
