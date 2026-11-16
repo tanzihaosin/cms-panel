@@ -86,7 +86,7 @@ function siteHost(origin: string | null): string | null {
         </template>
         <template #trailing>
           <UBadge v-if="projects.length" :label="String(projects.length)" color="neutral" variant="subtle" size="sm" />
-          <UButton v-if="me?.isSuperAdmin" label="Добавить проект" icon="i-lucide-plus" @click="createOpen = true" />
+          <UButton v-if="me?.isSuperAdmin" label="Добавить проект" icon="i-lucide-plus" color="neutral" variant="solid" class="ml-4 cursor-pointer" @click="createOpen = true" />
         </template>
         <template v-if="projects.length > 1" #right>
           <UInput

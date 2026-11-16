@@ -68,7 +68,7 @@ async function onSubmit() {
     <UCard class="w-full max-w-sm">
       <div class="mb-6">
         <h1 class="text-2xl font-semibold text-highlighted">
-          Вход в Crito CMS
+          Вход в CMS Panel
         </h1>
         <p class="mt-1 text-sm text-muted">
           Почта и пароль, которые выдал администратор. Забыли пароль? Обратитесь к администратору.

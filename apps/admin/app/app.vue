@@ -12,7 +12,7 @@ useHead({
   ],
   link: [{ rel: 'icon', type: 'image/png', href: `${useRuntimeConfig().app.baseURL.replace(/\/+$/, '')}/logo.png` }],
   htmlAttrs: { lang: 'ru' },
-  titleTemplate: title => title ? `${title} · Crito CMS` : 'Crito CMS'
+  titleTemplate: title => title ? `${title} · CMS Panel` : 'CMS Panel'
 })
 </script>
 

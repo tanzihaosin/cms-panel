@@ -110,7 +110,7 @@ const links = computed<NavigationMenuItem[][]>(() => [
       <template #header="{ collapsed }">
         <!-- Шапка сайдбара фиксированной высоты: в неё помещается только логотип. -->
         <!-- В свёрнутом сайдбаре (64px) широкий логотип не помещается и сжимается: прячем его. -->
-        <NuxtLink v-if="!collapsed" to="/" class="block px-1 py-1" aria-label="Crito CMS">
+        <NuxtLink v-if="!collapsed" to="/" class="block px-1 py-1" aria-label="CMS Panel">
           <!-- Тёмный текст логотипа нечитаем на тёмной теме: в ней показываем белый вариант. -->
           <img :src="logoSrc" alt="ЦРИТО" class="h-12 w-auto dark:hidden">
           <img :src="logoWhiteSrc" alt="ЦРИТО" class="hidden h-12 w-auto dark:block">
@@ -168,7 +168,7 @@ const links = computed<NavigationMenuItem[][]>(() => [
                 />
                 <div class="min-w-0 text-left leading-tight">
                   <p class="truncate text-sm font-medium text-highlighted">
-                    {{ me?.name ?? me?.email ?? 'Crito CMS' }}
+                    {{ me?.name ?? me?.email ?? 'CMS Panel' }}
                   </p>
                   <p v-if="me" class="truncate text-xs text-muted">
                     {{ me.isSuperAdmin ? 'Администратор' : 'Редактор' }}

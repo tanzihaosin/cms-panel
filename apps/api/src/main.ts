@@ -12,7 +12,7 @@ async function bootstrap() {
 
   // Документация API только в разработке.
   if (isDevelopment()) {
-    const config = new DocumentBuilder().setTitle('Crito CMS API').addBearerAuth().build();
+    const config = new DocumentBuilder().setTitle('CMS Panel API').addBearerAuth().build();
     SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, config));
   }
 
