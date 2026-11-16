@@ -101,7 +101,7 @@ const links = computed<NavigationMenuItem[][]>(() => [
 </script>
 
 <template>
-  <UDashboardGroup unit="rem">
+  <UDashboardGroup unit="rem" :class="demo ? '!absolute !inset-0 [&_.min-h-svh]:!min-h-0' : ''">
     <UDashboardSidebar
       id="default"
       v-model:open="open"

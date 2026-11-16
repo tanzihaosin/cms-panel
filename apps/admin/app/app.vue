@@ -26,13 +26,17 @@ useHead({
   <UApp :locale="ru">
     <NuxtLoadingIndicator />
 
-    <div v-if="config.public.demo" class="fixed inset-x-0 bottom-0 z-50 bg-primary px-4 py-2 text-center text-sm font-medium text-white">
-      Демо с вымышленными данными. Изменения сохраняются только в этом браузере и не влияют на реальные сайты.
-      <button type="button" class="ml-2 underline" @click="resetDemo">Сбросить демо</button>
-    </div>
+    <div :class="config.public.demo ? 'fixed inset-0 flex flex-col' : ''">
+      <div :class="config.public.demo ? 'relative min-h-0 flex-1' : ''">
+        <NuxtLayout>
+          <NuxtPage />
+        </NuxtLayout>
+      </div>
 
-    <NuxtLayout>
-      <NuxtPage />
-    </NuxtLayout>
+      <div v-if="config.public.demo" class="shrink-0 bg-primary px-4 py-2 text-center text-sm font-medium text-white">
+        Демо с вымышленными данными. Изменения сохраняются только в этом браузере и не влияют на реальные сайты.
+        <button type="button" class="ml-2 underline" @click="resetDemo">Сбросить демо</button>
+      </div>
+    </div>
   </UApp>
 </template>
